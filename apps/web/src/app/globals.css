@@ -126,12 +126,9 @@
 
   body {
     @apply bg-background text-foreground;
-    overflow: hidden;
   }
 
-  html {
-    overflow: hidden;
-  }
+  html {}
 }
 
 /* 隐藏滚动条但保留滚动功能 */
