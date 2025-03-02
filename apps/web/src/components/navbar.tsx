@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Menu, X, User, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,10 +15,28 @@ export function Navbar() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // 在组件挂载后设置主题状态
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // 添加点击外部关闭下拉菜单
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const handleSignOut = async () => {
@@ -94,7 +112,7 @@ export function Navbar() {
             </button>
 
             {user ? (
-              <div className="ml-3 relative">
+              <div className="ml-3 relative" ref={userMenuRef}>
                 <div>
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -108,27 +126,29 @@ export function Navbar() {
                 </div>
 
                 {isUserMenuOpen && (
-                  <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-background ring-1 ring-black ring-opacity-5 focus:outline-none">
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-foreground hover:bg-accent"
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      个人资料
-                    </Link>
-                    <Link
-                      href="/settings"
-                      className="block px-4 py-2 text-sm text-foreground hover:bg-accent"
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      设置
-                    </Link>
-                    <button
-                      onClick={handleSignOut}
-                      className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent"
-                    >
-                      退出登录
-                    </button>
+                  <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-background border border-border z-50">
+                    <div className="py-1">
+                      <Link
+                        href="/profile"
+                        className="block px-4 py-2 text-sm text-foreground hover:bg-accent"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        个人资料
+                      </Link>
+                      <Link
+                        href="/settings"
+                        className="block px-4 py-2 text-sm text-foreground hover:bg-accent"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        设置
+                      </Link>
+                      <button
+                        onClick={handleSignOut}
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent"
+                      >
+                        退出登录
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

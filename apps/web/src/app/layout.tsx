@@ -29,13 +29,13 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
           <AuthProvider>
-            <div className="h-screen flex flex-col overflow-hidden">
+            <div className="min-h-screen flex flex-col">
               <Navbar />
-              <main className="flex-1 overflow-hidden">{children}</main>
+              <main className="flex-1">{children}</main>
             </div>
             <Toaster richColors closeButton position="top-right" />
           </AuthProvider>
