@@ -4,6 +4,28 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { motion } from "framer-motion";
+
+// 动画变量
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { type: "spring", stiffness: 300, damping: 24 },
+  },
+};
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -57,17 +79,30 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="w-full max-w-md space-y-8">
-      <div>
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight">
           设置新密码
         </h2>
         <p className="mt-2 text-center text-sm text-muted-foreground">
           请输入您的新密码
         </p>
-      </div>
+      </motion.div>
 
-      <form className="mt-8 space-y-6" onSubmit={handleResetPassword}>
-        <div className="-space-y-px rounded-md shadow-sm">
+      <motion.form
+        className="mt-8 space-y-6"
+        onSubmit={handleResetPassword}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div
+          className="-space-y-px rounded-md shadow-sm"
+          variants={itemVariants}
+        >
           <div>
             <label htmlFor="password" className="sr-only">
               新密码
@@ -100,35 +135,51 @@ export default function ResetPasswordPage() {
               placeholder="确认新密码"
             />
           </div>
-        </div>
+        </motion.div>
 
         {message && (
-          <div className="text-sm text-green-600 text-center">{message}</div>
+          <motion.div
+            className="text-sm text-green-600 text-center"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ type: "spring", stiffness: 300, damping: 24 }}
+          >
+            {message}
+          </motion.div>
         )}
 
         {error && (
-          <div className="text-sm text-destructive text-center">{error}</div>
+          <motion.div
+            className="text-sm text-destructive text-center"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ type: "spring", stiffness: 300, damping: 24 }}
+          >
+            {error}
+          </motion.div>
         )}
 
-        <div>
-          <button
+        <motion.div variants={itemVariants}>
+          <motion.button
             type="submit"
             disabled={isLoading}
             className="group relative flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
             {isLoading ? "重置中..." : "重置密码"}
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
-        <div className="text-center">
+        <motion.div className="text-center" variants={itemVariants}>
           <Link
             href="/login"
             className="font-medium text-primary hover:text-primary/90"
           >
             返回登录
           </Link>
-        </div>
-      </form>
+        </motion.div>
+      </motion.form>
     </div>
   );
 }
