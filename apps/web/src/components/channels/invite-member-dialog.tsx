@@ -70,6 +70,7 @@ export function InviteMemberDialog({
 
       // 关闭对话框
       onClose();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("邀请用户失败:", error);
       toast.error(error.message || "邀请用户失败，请稍后再试");
