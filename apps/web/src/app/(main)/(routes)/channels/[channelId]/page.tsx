@@ -11,6 +11,7 @@ import {
   joinChannel,
   leaveChannel,
   sendChannelMessage,
+  updateChannel,
 } from "@/lib/supabase/channels";
 import type { Channel, ChannelMessage, ChannelMember } from "@/types/channel";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,20 @@ import {
 } from "@/components/ui/dialog";
 import { InviteMemberDialog } from "@/components/channels/invite-member-dialog";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 type ChannelMemberWithUser = ChannelMember & {
   user?: {
@@ -60,6 +75,16 @@ type ChannelMemberWithUser = ChannelMember & {
     avatar_url?: string | null;
   };
 };
+
+// Add this schema for form validation
+const editChannelSchema = z.object({
+  name: z
+    .string()
+    .min(1, "频道名称不能为空")
+    .max(50, "频道名称不能超过50个字符"),
+  description: z.string().max(500, "频道描述不能超过500个字符").optional(),
+  is_private: z.boolean().default(false),
+});
 
 export default function ChannelPage() {
   const { channelId } = useParams();
@@ -76,9 +101,21 @@ export default function ChannelPage() {
   const [isSending, setIsSending] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
+
+  // Add form for editing channel
+  const editForm = useForm<z.infer<typeof editChannelSchema>>({
+    resolver: zodResolver(editChannelSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      is_private: false,
+    },
+  });
 
   useEffect(() => {
     setIsInit(true);
@@ -199,6 +236,17 @@ export default function ChannelPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Update form values when channel data changes
+  useEffect(() => {
+    if (channel) {
+      editForm.reset({
+        name: channel.name,
+        description: channel.description || "",
+        is_private: channel.is_private,
+      });
+    }
+  }, [channel, editForm]);
+
   const handleJoinChannel = async () => {
     if (!user || !channelId) return;
 
@@ -296,6 +344,42 @@ export default function ChannelPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       handleSendMessage(e as unknown as React.FormEvent);
+    }
+  };
+
+  // Handle channel update
+  const handleUpdateChannel = async (
+    values: z.infer<typeof editChannelSchema>
+  ) => {
+    if (!channelId) return;
+
+    try {
+      setIsUpdating(true);
+      await updateChannel(channelId as string, {
+        name: values.name,
+        description: values.description || null,
+        is_private: values.is_private,
+      });
+
+      // Update local state
+      setChannel((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: values.name,
+              description: values.description || null,
+              is_private: values.is_private,
+            }
+          : null
+      );
+
+      setIsEditDialogOpen(false);
+      toast.success("频道信息已更新");
+    } catch (error) {
+      console.error("更新频道失败:", error);
+      toast.error("无法更新频道信息，请稍后再试");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -484,7 +568,9 @@ export default function ChannelPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>编辑频道信息</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsEditDialogOpen(true)}>
+                  编辑频道信息
+                </DropdownMenuItem>
                 <DropdownMenuItem>管理成员</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive">
@@ -645,6 +731,94 @@ export default function ChannelPage() {
           }}
         />
       )}
+
+      {/* Add the Edit Channel Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑频道信息</DialogTitle>
+            <DialogDescription>
+              修改频道的名称、描述和隐私设置
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...editForm}>
+            <form
+              onSubmit={editForm.handleSubmit(handleUpdateChannel)}
+              className="space-y-4"
+            >
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>频道名称</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="输入频道名称" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>频道描述</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="输入频道描述（可选）"
+                        rows={3}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      简要描述频道的用途和讨论内容
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="is_private"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">私密频道</FormLabel>
+                      <FormDescription>
+                        私密频道仅对被邀请的成员可见
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditDialogOpen(false)}
+                >
+                  取消
+                </Button>
+                <Button type="submit" disabled={isUpdating}>
+                  {isUpdating ? "更新中..." : "保存更改"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
