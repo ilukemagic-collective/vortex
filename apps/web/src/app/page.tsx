@@ -42,7 +42,17 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       {/* 英雄区域 */}
       <section className="relative w-full py-20 md:py-32">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 z-0" />
+        {/* Add background image */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/images/banner.jpg"
+            alt="Vortex Banner"
+            fill
+            priority
+            className="object-cover opacity-40"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-primary/20 z-0" />
 
         {/* 背景装饰 */}
         <div className="absolute top-20 right-0 w-96 h-96 bg-primary/10 rounded-full filter blur-3xl opacity-50" />
@@ -59,7 +69,7 @@ export default function Home() {
               <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
                 Vortex 实时社区平台
               </h1>
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
+              <p className="text-xl md:text-2xl text-foreground font-medium max-w-3xl mx-auto text-shadow-sm">
                 连接、交流、分享 - 随时随地
               </p>
             </motion.div>
