@@ -32,6 +32,7 @@ import {
   SettingsIcon,
   LogOutIcon,
   UserPlusIcon,
+  SmileIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -70,6 +71,14 @@ import { Switch } from "@/components/ui/switch";
 import { MDXRemote, MDXRemoteSerializeResult } from "next-mdx-remote";
 import remarkGfm from "remark-gfm";
 import { serialize } from "next-mdx-remote/serialize";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useTheme } from "@/lib/theme-context";
 
 type ChannelMemberWithUser = ChannelMember & {
   user?: {
@@ -124,6 +133,9 @@ export default function ChannelPage() {
       is_private: false,
     },
   });
+
+  // 修改主题 hook 的使用
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!channelId || !user) return;
@@ -464,6 +476,28 @@ export default function ChannelPage() {
     }
   };
 
+  // 添加处理 emoji 选择的函数
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleEmojiSelect = (emoji: any) => {
+    const textarea = messageInputRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+
+    setNewMessage(
+      value.substring(0, start) + emoji.native + value.substring(end)
+    );
+
+    // 在下一个事件循环中设置光标位置
+    requestAnimationFrame(() => {
+      const newPosition = start + emoji.native.length;
+      textarea.focus();
+      textarea.setSelectionRange(newPosition, newPosition);
+    });
+  };
+
   // 显示加载状态
   if (isLoading || !isDataReady) {
     return (
@@ -766,16 +800,44 @@ export default function ChannelPage() {
 
           <form onSubmit={handleSendMessage} className="border-t p-4 shrink-0">
             <div className="flex gap-2">
-              <Textarea
-                ref={messageInputRef}
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="输入消息... (Enter 发送，Ctrl+Enter 换行) 支持 Markdown 格式"
-                disabled={isSending}
-                className="flex-1 min-h-[2.5rem] max-h-[150px] resize-none"
-                rows={1}
-              />
+              <div className="flex-1 flex gap-2 items-end">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                    >
+                      <SmileIcon className="h-5 w-5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="start"
+                    className="w-auto p-0 bg-transparent border-none"
+                  >
+                    <Picker
+                      data={data}
+                      onEmojiSelect={handleEmojiSelect}
+                      locale="zh"
+                      previewPosition="none"
+                      skinTonePosition="none"
+                      theme={theme === "dark" ? "dark" : "light"}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Textarea
+                  ref={messageInputRef}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="输入消息... (Enter 发送，Ctrl+Enter 换行) 支持 Markdown 格式"
+                  disabled={isSending}
+                  className="min-h-[2.5rem] max-h-[150px] resize-none"
+                  rows={1}
+                />
+              </div>
               <Button
                 type="submit"
                 size="icon"
