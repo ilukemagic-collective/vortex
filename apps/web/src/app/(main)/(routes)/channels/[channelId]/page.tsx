@@ -96,7 +96,6 @@ export default function ChannelPage() {
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [members, setMembers] = useState<ChannelMemberWithUser[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isInit, setIsInit] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -109,6 +108,9 @@ export default function ChannelPage() {
   const [compiledMessages, setCompiledMessages] = useState<{
     [key: string]: MDXRemoteSerializeResult;
   }>({});
+
+  // 添加一个新的状态来跟踪数据是否完全加载
+  const [isDataReady, setIsDataReady] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
@@ -124,39 +126,49 @@ export default function ChannelPage() {
   });
 
   useEffect(() => {
-    setIsInit(true);
-  }, []);
-
-  useEffect(() => {
     if (!channelId || !user) return;
 
     const fetchChannelData = async () => {
       try {
         setIsLoading(true);
+        setIsDataReady(false); // 重置数据准备状态
 
-        // 获取频道信息
-        const channelData = await getChannelById(channelId as string);
+        // 并行获取所有需要的数据
+        const [channelData, membersData] = await Promise.all([
+          getChannelById(channelId as string),
+          getChannelMembers(channelId as string),
+        ]);
+
+        // 如果频道不存在，直接返回
+        if (!channelData) {
+          setChannel(null);
+          setIsDataReady(true);
+          return;
+        }
+
+        // 设置频道数据
         setChannel(channelData);
-
-        // 获取频道成员
-        const membersData = await getChannelMembers(channelId as string);
         setMembers(membersData);
 
         // 检查当前用户是否是成员及其角色
         const currentMember = membersData.find(
           (member) => member.user_id === user.id
         );
+
         if (currentMember) {
           setIsMember(true);
           setUserRole(currentMember.role);
-
           // 获取消息
           const messagesData = await getChannelMessages(channelId as string);
           setMessages(messagesData);
         } else {
           setIsMember(false);
           setUserRole(null);
+          setMessages([]);
         }
+
+        // 所有数据都准备好了
+        setIsDataReady(true);
       } catch (error) {
         console.error("获取频道数据失败:", error);
         toast.error("无法加载频道数据，请稍后再试");
@@ -452,7 +464,8 @@ export default function ChannelPage() {
     }
   };
 
-  if (isLoading && !isInit) {
+  // 显示加载状态
+  if (isLoading || !isDataReady) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)]">
         <div className="text-center">
@@ -463,6 +476,7 @@ export default function ChannelPage() {
     );
   }
 
+  // 频道不存在
   if (!channel) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)]">
