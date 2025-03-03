@@ -67,6 +67,9 @@ import {
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { MDXRemote, MDXRemoteSerializeResult } from "next-mdx-remote";
+import remarkGfm from "remark-gfm";
+import { serialize } from "next-mdx-remote/serialize";
 
 type ChannelMemberWithUser = ChannelMember & {
   user?: {
@@ -93,7 +96,6 @@ export default function ChannelPage() {
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [members, setMembers] = useState<ChannelMemberWithUser[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isInit, setIsInit] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -103,9 +105,15 @@ export default function ChannelPage() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [compiledMessages, setCompiledMessages] = useState<{
+    [key: string]: MDXRemoteSerializeResult;
+  }>({});
+
+  // 添加一个新的状态来跟踪数据是否完全加载
+  const [isDataReady, setIsDataReady] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messageInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Add form for editing channel
   const editForm = useForm<z.infer<typeof editChannelSchema>>({
@@ -118,39 +126,49 @@ export default function ChannelPage() {
   });
 
   useEffect(() => {
-    setIsInit(true);
-  }, []);
-
-  useEffect(() => {
     if (!channelId || !user) return;
 
     const fetchChannelData = async () => {
       try {
         setIsLoading(true);
+        setIsDataReady(false); // 重置数据准备状态
 
-        // 获取频道信息
-        const channelData = await getChannelById(channelId as string);
+        // 并行获取所有需要的数据
+        const [channelData, membersData] = await Promise.all([
+          getChannelById(channelId as string),
+          getChannelMembers(channelId as string),
+        ]);
+
+        // 如果频道不存在，直接返回
+        if (!channelData) {
+          setChannel(null);
+          setIsDataReady(true);
+          return;
+        }
+
+        // 设置频道数据
         setChannel(channelData);
-
-        // 获取频道成员
-        const membersData = await getChannelMembers(channelId as string);
         setMembers(membersData);
 
         // 检查当前用户是否是成员及其角色
         const currentMember = membersData.find(
           (member) => member.user_id === user.id
         );
+
         if (currentMember) {
           setIsMember(true);
           setUserRole(currentMember.role);
-
           // 获取消息
           const messagesData = await getChannelMessages(channelId as string);
           setMessages(messagesData);
         } else {
           setIsMember(false);
           setUserRole(null);
+          setMessages([]);
         }
+
+        // 所有数据都准备好了
+        setIsDataReady(true);
       } catch (error) {
         console.error("获取频道数据失败:", error);
         toast.error("无法加载频道数据，请稍后再试");
@@ -247,6 +265,50 @@ export default function ChannelPage() {
     }
   }, [channel, editForm]);
 
+  // 在接收到新消息时编译 MDX
+  useEffect(() => {
+    const compileMessages = async () => {
+      const newCompiledMessages: { [key: string]: MDXRemoteSerializeResult } =
+        {};
+      let hasNewMessages = false;
+
+      for (const message of messages) {
+        if (!compiledMessages[message.id]) {
+          hasNewMessages = true;
+          try {
+            const compiled = await serialize(message.content, {
+              parseFrontmatter: false,
+              mdxOptions: {
+                remarkPlugins: [remarkGfm],
+                format: "mdx",
+              },
+            });
+            newCompiledMessages[message.id] = compiled;
+          } catch (error) {
+            console.error("Error compiling message:", error);
+            const fallbackContent = await serialize(message.content, {
+              parseFrontmatter: false,
+              mdxOptions: {
+                remarkPlugins: [],
+              },
+            });
+            newCompiledMessages[message.id] = fallbackContent;
+          }
+        }
+      }
+
+      if (hasNewMessages) {
+        setCompiledMessages((prev) => ({
+          ...prev,
+          ...newCompiledMessages,
+        }));
+      }
+    };
+
+    compileMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
   const handleJoinChannel = async () => {
     if (!user || !channelId) return;
 
@@ -340,10 +402,29 @@ export default function ChannelPage() {
     }
   };
 
-  // 处理按键事件，支持Ctrl+Enter发送消息
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      handleSendMessage(e as unknown as React.FormEvent);
+  // 修改处理按键事件的函数
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter") {
+      if (e.ctrlKey || e.metaKey) {
+        // 按住 Ctrl/Cmd + Enter，插入换行符
+        e.preventDefault();
+        const textarea = e.currentTarget;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const value = textarea.value;
+
+        setNewMessage(value.substring(0, start) + "\n" + value.substring(end));
+
+        // 在状态更新后设置光标位置
+        requestAnimationFrame(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + 1, start + 1);
+        });
+      } else {
+        // 只按 Enter，发送消息
+        e.preventDefault();
+        handleSendMessage(e as unknown as React.FormEvent);
+      }
     }
   };
 
@@ -383,7 +464,8 @@ export default function ChannelPage() {
     }
   };
 
-  if (isLoading && !isInit) {
+  // 显示加载状态
+  if (isLoading || !isDataReady) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)]">
         <div className="text-center">
@@ -394,6 +476,7 @@ export default function ChannelPage() {
     );
   }
 
+  // 频道不存在
   if (!channel) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)]">
@@ -651,9 +734,13 @@ export default function ChannelPage() {
                           isCurrentUser
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted"
-                        }`}
+                        } prose prose-sm max-w-none`}
                       >
-                        {message.content}
+                        {compiledMessages[message.id] ? (
+                          <MDXRemote {...compiledMessages[message.id]} />
+                        ) : (
+                          <p>{message.content}</p>
+                        )}
                       </div>
                     </div>
                     {isCurrentUser && (
@@ -679,14 +766,15 @@ export default function ChannelPage() {
 
           <form onSubmit={handleSendMessage} className="border-t p-4 shrink-0">
             <div className="flex gap-2">
-              <Input
+              <Textarea
                 ref={messageInputRef}
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="输入消息... (Ctrl+Enter 发送)"
+                placeholder="输入消息... (Enter 发送，Ctrl+Enter 换行) 支持 Markdown 格式"
                 disabled={isSending}
-                className="flex-1"
+                className="flex-1 min-h-[2.5rem] max-h-[150px] resize-none"
+                rows={1}
               />
               <Button
                 type="submit"
@@ -697,7 +785,7 @@ export default function ChannelPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              按 Ctrl+Enter 快速发送消息
+              按 Enter 发送消息，Ctrl+Enter 换行 • 支持 Markdown 格式
             </p>
           </form>
         </>
