@@ -79,6 +79,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useTheme } from "@/lib/theme-context";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 type ChannelMemberWithUser = ChannelMember & {
   user?: {
@@ -136,6 +145,13 @@ export default function ChannelPage() {
 
   // 修改主题 hook 的使用
   const { theme } = useTheme();
+
+  const [showMentionList, setShowMentionList] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const mentionTriggerPos = useRef(-1);
+
+  // 添加新的状态来跟踪当前选中的用户索引
+  const [selectedUserIndex, setSelectedUserIndex] = useState(0);
 
   useEffect(() => {
     if (!channelId || !user) return;
@@ -416,7 +432,43 @@ export default function ChannelPage() {
 
   // 修改处理按键事件的函数
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter") {
+    if (showMentionList) {
+      // 处理提及列表的键盘导航
+      const filteredMembers = members.filter((member) =>
+        member.user?.username
+          ?.toLowerCase()
+          .includes(mentionFilter.toLowerCase())
+      );
+
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedUserIndex((prev) =>
+            prev > 0 ? prev - 1 : filteredMembers.length - 1
+          );
+          return;
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedUserIndex((prev) =>
+            prev < filteredMembers.length - 1 ? prev + 1 : 0
+          );
+          return;
+        case "Enter":
+          e.preventDefault();
+          if (filteredMembers.length > 0) {
+            handleMentionSelect(filteredMembers[selectedUserIndex]);
+            return;
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          setShowMentionList(false);
+          return;
+      }
+    }
+
+    // 原有的 Enter 处理逻辑
+    if (e.key === "Enter" && !showMentionList) {
       if (e.ctrlKey || e.metaKey) {
         // 按住 Ctrl/Cmd + Enter，插入换行符
         e.preventDefault();
@@ -495,6 +547,51 @@ export default function ChannelPage() {
       const newPosition = start + emoji.native.length;
       textarea.focus();
       textarea.setSelectionRange(newPosition, newPosition);
+    });
+  };
+
+  // 修改处理输入变化的函数
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf("@");
+
+    if (
+      lastAtSymbol !== -1 &&
+      (lastAtSymbol === 0 ||
+        newValue[lastAtSymbol - 1] === " " ||
+        newValue[lastAtSymbol - 1] === "\n")
+    ) {
+      const mentionQuery = textBeforeCursor.slice(lastAtSymbol + 1);
+      setMentionFilter(mentionQuery);
+      setShowMentionList(true);
+      mentionTriggerPos.current = lastAtSymbol;
+      setSelectedUserIndex(0); // 重置选中索引
+    } else {
+      setShowMentionList(false);
+    }
+
+    setNewMessage(newValue);
+  };
+
+  // 处理用户选择
+  const handleMentionSelect = (member: ChannelMemberWithUser) => {
+    if (!messageInputRef.current) return;
+
+    const textarea = messageInputRef.current;
+    const beforeMention = newMessage.slice(0, mentionTriggerPos.current);
+    const afterMention = newMessage.slice(textarea.selectionStart);
+    const mention = `@${member.user?.username} `;
+
+    setNewMessage(beforeMention + mention + afterMention);
+    setShowMentionList(false);
+
+    // 设置光标位置
+    requestAnimationFrame(() => {
+      const newCursorPos = beforeMention.length + mention.length;
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
     });
   };
 
@@ -800,7 +897,7 @@ export default function ChannelPage() {
 
           <form onSubmit={handleSendMessage} className="border-t p-4 shrink-0">
             <div className="flex gap-2">
-              <div className="flex-1 flex gap-2 items-end">
+              <div className="relative flex-1 flex gap-2 items-end">
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -827,16 +924,70 @@ export default function ChannelPage() {
                     />
                   </PopoverContent>
                 </Popover>
-                <Textarea
-                  ref={messageInputRef}
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="输入消息... (Enter 发送，Ctrl+Enter 换行) 支持 Markdown 格式"
-                  disabled={isSending}
-                  className="min-h-[2.5rem] max-h-[150px] resize-none"
-                  rows={1}
-                />
+                <div className="relative flex-1">
+                  <Textarea
+                    ref={messageInputRef}
+                    value={newMessage}
+                    onChange={handleMessageChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder="输入消息... (Enter 发送，Ctrl+Enter 换行，@ 提及用户) 支持 Markdown 格式"
+                    disabled={isSending}
+                    className="min-h-[2.5rem] max-h-[150px] resize-none"
+                    rows={1}
+                  />
+
+                  {showMentionList && (
+                    <div className="absolute bottom-full mb-1 left-0 w-64 z-50">
+                      <Command
+                        className="border shadow-md rounded-lg"
+                        shouldFilter={false}
+                      >
+                        <CommandInput
+                          placeholder="搜索成员..."
+                          value={mentionFilter}
+                          onValueChange={setMentionFilter}
+                        />
+                        <CommandList className="max-h-[200px]">
+                          <CommandEmpty>未找到成员</CommandEmpty>
+                          <CommandGroup>
+                            {members
+                              .filter((member) =>
+                                member.user?.username
+                                  ?.toLowerCase()
+                                  .includes(mentionFilter.toLowerCase())
+                              )
+                              .map((member, index) => (
+                                <CommandItem
+                                  key={member.id}
+                                  onSelect={() => handleMentionSelect(member)}
+                                  className={cn(
+                                    "flex items-center gap-2 p-2 cursor-pointer",
+                                    "aria-selected:bg-transparent hover:bg-transparent data-[selected]:bg-transparent data-[highlighted]:bg-transparent",
+                                    selectedUserIndex === index && "!bg-accent"
+                                  )}
+                                  onMouseEnter={(e) => e.preventDefault()}
+                                  onMouseMove={(e) => e.preventDefault()}
+                                  data-value={member.user?.username}
+                                >
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarImage
+                                      src={member.user?.avatar_url || undefined}
+                                    />
+                                    <AvatarFallback>
+                                      {member.user?.username
+                                        ?.charAt(0)
+                                        .toUpperCase() || "?"}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span>{member.user?.username}</span>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </div>
+                  )}
+                </div>
               </div>
               <Button
                 type="submit"
