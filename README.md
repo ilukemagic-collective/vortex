@@ -35,7 +35,7 @@ Vortex是为游戏社区、兴趣小组、远程团队等需要实时协作的�
 ### 后端服务
 
 - Next.js API Routes
-- Supabase (Auth/Database/Storage/Realtime)
+- honojs + mysql + redis + prisma
 - LiveKit (WebRTC)
 
 ## 项目结构
@@ -69,7 +69,6 @@ vortex/
 
 - Node.js 18+
 - pnpm 8+
-- Supabase账户
 - LiveKit账户（用于语音/视频功能）
 
 ### 环境设置
@@ -92,8 +91,6 @@ pnpm install
 复制`.env.local.example`文件到`.env.local`并填写必要的环境变量：
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 LIVEKIT_API_KEY=your-livekit-api-key
 LIVEKIT_API_SECRET=your-livekit-api-secret
 ```
@@ -122,7 +119,7 @@ pnpm build
 
 ## 数据库设计
 
-Vortex使用Supabase提供的PostgreSQL数据库，主要表结构包括：
+Vortex使用honojs提供的mysql数据库，主要表结构包括：
 
 - users: 用户信息
 - channels: 频道信息

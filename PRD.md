@@ -27,7 +27,7 @@ PRD（产品需求文档）
 2.2.1 实时聊天
 功能描述：用户在频道内发送文字消息，支持 Markdown、表情回复、消息引用。
 技术实现：
-Web 端：通过 Supabase Realtime 监听 PostgreSQL 数据库的 INSERT 事件。
+Web 端：通过 Socket.io 实现实时消息推送，使用 Prisma 处理消息历史查询和分页。
 App 端：复用相同逻辑，通过 React Native 的 FlatList 优化消息列表渲染。
 2.2.2 语音通话
 功能描述：用户加入语音频道后，可实时通话或共享屏幕。
@@ -38,24 +38,23 @@ App 端：使用 LiveKit React Native SDK，通过 Expo Dev Client 调用原生�
 模块 技术选型
 Web 前端 Next.js 14（App Router）、React 18、TypeScript、Tailwind CSS、shadcn/ui
 App 前端 React Native、Expo SDK 50、TypeScript、NativeWind、React Navigation 6
-后端服务 Next.js API Routes + Supabase（Auth/Database/Storage/Realtime）
-实时通信 Supabase Realtime（WebSocket）、LiveKit（WebRTC）
-数据库 PostgreSQL（托管于 Supabase）、Redis（缓存在线状态）
-文件存储 Supabase Storage（与 S3 兼容）
+后端服务 honojs、Prisma ORM、Socket.io（WebSocket）
+实时通信 Socket.io（WebSocket）、LiveKit（WebRTC）
+数据库 MySQL、Redis（缓存在线状态）
+文件存储 AWS S3 / 阿里云 OSS
 DevOps Vercel（Web 部署）、EAS Build（App 构建）、GitHub Actions（CI/CD）
 3.2 架构图
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐  
-│ Web 端 │ HTTP │ Next.js │ REST │ Supabase │  
-│ (Next.js 14) ├──────►│ API Routes ├──────►│ (BaaS) │  
-└───────┬───────┘ └───────┬───────┘ └───────┬───────┘  
- │ │ │  
- │ WebSocket │ PostgreSQL │ S3  
- ▼ ▼ ▼  
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐  
-│ App 端 │ │ LiveKit │ │ Vercel/EAS │  
-│ (React Native)├──────►│ (WebRTC) │ │ (Deployment) │  
-└───────────────┘ └───────────────┘ └───────────────┘  
-4. 开发计划
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│ Web 端 │ HTTP │ honojs │ │ MySQL │
+│ (Next.js 14) ├──────►│ (REST API) ├────►│ Database │
+└───────┬───────┘ └───────┬───────┘ └───────┬───────┘
+│ │ │
+│ Socket.io │ Prisma │ S3/OSS
+▼ ▼ ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│ App 端 │ │ LiveKit │ │ Vercel/EAS │
+│(React Native) ├────►│ (WebRTC) │ │ (Deployment) │
+└───────────────┘ └───────────────┘ └───────────────┘ 4. 开发计划
 4.1 里程碑规划
 阶段 时间 交付物
 需求确认 2 周 PRD 文档、UI/UX 原型
@@ -68,11 +67,10 @@ App 端开发 8 周 移动端适配、推送通知、语音消息录制
 4.2 详细排期
 第 1-2 周：需求与设计
 完成 PRD 文档和 Figma 高保真原型。
-技术选型验证（Supabase Realtime 压测、WebRTC 延迟测试）。
 第 3-8 周：Web 端开发
-用户系统（NextAuth.js 集成）。
-实时聊天（Supabase 订阅、消息历史分页）。
-文件上传（UploadThing + Supabase Storage）。
+用户系统（ JWT 认证）。
+实时聊天（Socket.io 集成、消息历史分页）。
+文件上传（Multer + AWS S3/阿里云 OSS）。
 第 5-12 周：App 端开发
 复用 Web 业务逻辑（通过 Monorepo 共享代码）。
 实现推送通知（Expo Notifications + FCM/APNs）。
@@ -90,12 +88,12 @@ App 端：冷启动时间 < 2s，消息列表滚动帧率 ≥ 60 FPS。
 用户敏感数据（密码、Token）加密存储（AES-256）。
 API 接口防刷策略（限流 100 次/分钟）。 6. 风险与应对
 风险 应对措施
-实时消息延迟过高 使用 Supabase Realtime 的负载均衡 + 边缘节点加速。
+实时消息延迟过高 使用 Socket.io 集群模式 + Redis Adapter 实现多节点扩展。
 跨平台 UI 不一致 通过 Monorepo 共享组件逻辑，使用 NativeWind 统一样式。
 App 审核被拒 提前与应用商店沟通功能合规性，预留 2 周缓冲期。 7. 预算与资源
 项目 成本
 开发团队（6 人） 24 人月（约 $240k）
-云服务（Supabase） $299/月（Growth 计划）
+云服务 服务器费用（$200/月）+ MySQL 数据库（$100/月）+ Redis（$50/月）+ 对象存储（$100/月）
 第三方服务 LiveKit（$99/月） 8. 附录
 UI 原型链接：Figma 设计稿（[链接]）。
 技术文档：API 接口文档、数据库 Schema。
